@@ -3,7 +3,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { callSignature, createToolFailureTracker, isToolErrorResult } = require('../../src/lib/tool-failure');
+const { callSignature, createRepeatTracker, createToolFailureTracker, isToolErrorResult } = require('../../src/lib/tool-failure');
 
 test('tool call signatures are stable when object key order changes', () => {
   assert.equal(
@@ -32,4 +32,16 @@ test('success clears a call failure count', () => {
   tracker.record('read_file', args, 'hello');
   tracker.record('read_file', args, 'Error: ENOENT');
   assert.equal(tracker.shouldBlock('read_file', args), false);
+});
+
+test('a file read is blocked until its version changes or an edit succeeds', () => {
+  const tracker = createRepeatTracker();
+  const args = { path: 'plan.md' };
+  tracker.record('read_file', args, 'first version', 'v1');
+  assert.equal(tracker.shouldBlock('read_file', args, 'v1'), true);
+  assert.equal(tracker.shouldBlock('read_file', args, 'v2'), false);
+  tracker.record('read_file', args, 'second version', 'v2');
+  assert.equal(tracker.shouldBlock('read_file', args, 'v2'), true);
+  tracker.record('edit_file', { path: 'plan.md' }, 'Edited plan.md');
+  assert.equal(tracker.shouldBlock('read_file', args, 'v2'), false);
 });

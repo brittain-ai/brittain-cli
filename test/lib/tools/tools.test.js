@@ -314,6 +314,7 @@ test('destructive commands are classified; routine ones are not', () => {
     'echo boom > /etc/hosts', 'rm ~/Documents/file.txt', 'mv thing /usr/local/bin/thing',
     // real device writes stay destructive even though /dev/null does not
     'dd if=/dev/zero > /dev/disk0', 'echo x > /dev/rdisk2',
+    'lsof -ti:3000 | xargs kill 2>/dev/null; sleep 1', 'pkill -f "node server.js"',
   ];
   const routine = [
     'node test.js', 'npm test', 'npx tsc', 'git status', 'git diff', 'git add -A',

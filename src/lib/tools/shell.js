@@ -25,6 +25,10 @@ const DESTRUCTIVE_COMMAND_PATTERNS = [
   /\b(curl|wget)\b[^|;&]*\|\s*(ba|z|da)?sh\b/,   // pipe a download into a shell
   /\bmkfs\b|\bdiskutil\b|\bdd\s+if=/,
   /\b(shutdown|reboot|halt)\b/,
+  // CLI addition: a --yes replay used lsof | xargs kill on port 3000 and
+  // stopped a process outside its project. Every process stop needs a human.
+  /\b(?:kill|killall|pkill)\b/,
+  /\bfuser\b[^|;&]*\s-k\b/,
   /\bkill(all)?\b\s+-9\s+-1\b/,
   /\blaunchctl\b|\bcrontab\b/,
   /\bnpm\s+(publish|unpublish)\b/,
@@ -47,6 +51,7 @@ const DESTRUCTIVE_COMMAND_PATTERNS_WIN = [
   /\bDiskpart\b/i,
   /\bStop-Computer\b|\bRestart-Computer\b|\bshutdown\b\s+\/[rs]/i,
   /\bStop-Process\b[^&|]*-Force|\btaskkill\b[^&|]*\/f/i,
+  /\b(?:Stop-Process|taskkill)\b/i,
   /\bSet-ExecutionPolicy\b/i,
   /\bnet\s+user\b|\bnet\s+localgroup\b/i,
   /\bicacls\b[^&|]*\/grant/i,

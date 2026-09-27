@@ -173,8 +173,8 @@ written into it.
   `*.key` and anything listed in a `.brittainprotect` file are never written.
 - Supervised (the default) asks before every edit, move, delete and command.
   Trusted (`/auto on`, `--yes`) runs those without asking.
-- Destructive commands (`rm -rf`, `git push`, `sudo`, `git reset --hard`, a
-  download piped into a shell, and so on), reads of secrets (`.env`, keys,
+- Destructive commands (`rm -rf`, `git push`, `sudo`, `git reset --hard`, `kill`,
+  a download piped into a shell, and so on), reads of secrets (`.env`, keys,
   `.npmrc`), and anything that looks like it moves money always ask, even
   in trusted mode. With nobody there to ask, they are denied.
 - Every run first snapshots the working tree to a hidden Git ref, so

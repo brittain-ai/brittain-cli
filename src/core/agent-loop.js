@@ -8,11 +8,13 @@
 // browser evaluation guards, rendered PDF pages, parked-call suspension, the
 // orchestration run log, and Jev context views.
 
+const fs = require('node:fs');
+const path = require('node:path');
 const { parseRawToolCalls } = require('./tool-call-parser');
 const { modelReadyMessages, estimateTokens } = require('./context-hygiene');
 const { unapprovedResult, isSensitiveToolCall } = require('./approvals');
 const { estimateContextTokens } = require('../lib/context-estimator');
-const { createRepeatTracker, createToolFailureTracker } = require('../lib/tool-failure');
+const { callSignature, createRepeatTracker, createToolFailureTracker } = require('../lib/tool-failure');
 const { boundToolResult, toolResultLimit } = require('../lib/tool-result');
 const { outcomeOf } = require('../lib/ledger');
 const { costOf, addTurn: addCostTurn, describeTurn: describeTurnCost, describeTotals: describeCostTotals } = require('../lib/cost');
@@ -38,6 +40,22 @@ function responseReserve(contextLength) {
 
 function contextSafetyMargin(contextLength) {
   return Math.min(2048, Math.max(512, Math.floor(contextLength * 0.0625)));
+}
+
+// CLI addition: permit a second read only when the file changed since the
+// first read. The uptime-monitor run read one unchanged status file repeatedly.
+function fileVersion(name, args, cwd) {
+  if (name !== 'read_file' && name !== 'get_file_lines') return null;
+  if (typeof args.path !== 'string') return null;
+  const target = path.resolve(cwd, args.path);
+  const relative = path.relative(cwd, target);
+  if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) return null;
+  try {
+    const stat = fs.statSync(target, { bigint: true });
+    return `${stat.dev}:${stat.ino}:${stat.size}:${stat.mtimeNs}:${stat.ctimeNs}`;
+  } catch {
+    return null;
+  }
 }
 
 function createAgentLoop(rt) {
@@ -127,8 +145,10 @@ function createAgentLoop(rt) {
       emit(result, true);
       return { result, repeatedCallBlocked: true };
     }
-    if (repeats.shouldBlock(name, args)) {
-      const result = `Error: You already made this exact ${name || 'tool'} call twice in this turn and got the same result both times, so Brittain did not run it again. Use the result you already have. If you are stuck, try a different approach, or use ask_user to ask the user for what you cannot see yourself.`;
+    if (repeats.shouldBlock(name, args, fileVersion(name, args, cwd))) {
+      const result = name === 'read_file' || name === 'get_file_lines'
+        ? 'Error: You already read this unchanged file in this turn. Use the result you have. Continue the task or report what remains unknown.'
+        : `Error: You already made this exact ${name || 'tool'} call twice in this turn and got the same result both times, so Brittain did not run it again. Use the result you already have. If you are stuck, try a different approach, or use ask_user to ask the user for what you cannot see yourself.`;
       failureDirectives.add(name || 'tool');
       emit(result, true);
       return { result, repeatedCallBlocked: true };
@@ -194,6 +214,10 @@ function createAgentLoop(rt) {
     const useThink = await rt.models.thinkValue(model, think);
     let lastContent = '';
     let emptyNudges = 0;
+    // CLI addition: finish with the evidence already gathered if the model
+    // repeats the same blocked call twice.
+    const blockedCalls = new Map();
+    let forcedFinalReason = '';
     // A turn is one user message, however many model calls the tool loop makes.
     // Cost is summed across all of them and reported once, because that is the
     // unit a person recognises as "what that question cost me".
@@ -348,10 +372,16 @@ function createAgentLoop(rt) {
         const toolOutcome = outcomeOf(result);
         if (toolOutcome === 'denied') deniedCalls += 1;
         rt.state.recordToolTelemetry(result, toolOutcome === 'denied');
+        if (repeatedCallBlocked) {
+          const signature = callSignature(name, args);
+          const count = (blockedCalls.get(signature) || 0) + 1;
+          blockedCalls.set(signature, count);
+          if (count >= 2) forcedFinalReason = 'You repeated the same blocked tool call. Do not call more tools. Answer from the evidence you have, or state the specific blocker.';
+        }
         if (!repeatedCallBlocked) {
           const failure = toolFailures.record(name, args, result);
           if (failure.reachedLimit) failureDirectives.add(name || 'tool');
-          repeats.record(name, args, result);
+          repeats.record(name, args, result, fileVersion(name, args, cwd));
         }
         const bounded = boundToolResult(result, { toolName: name || 'tool', maxChars: resultLimit });
         if (bounded.truncated) {
@@ -360,6 +390,7 @@ function createAgentLoop(rt) {
         conversation().push({ role: 'tool', tool_name: name, tool_call_id: tc.id, content: bounded.content });
       }
       await rt.chatJobs.persistActive();
+      if (forcedFinalReason) break;
       if (failureDirectives.size) {
         conversation().push({
           role: 'user',
@@ -368,8 +399,16 @@ function createAgentLoop(rt) {
         });
       }
       // CLI addition: a model that keeps exploring used to run into the cap
-      // with nothing written. Say how much room is left before it runs out.
+      // with nothing written. Check progress halfway through and warn again
+      // near the cap without changing the user's 50-step limit.
       const remaining = maxAgentSteps - (step + 1);
+      if (maxAgentSteps >= 10 && remaining === Math.floor(maxAgentSteps / 2)) {
+        conversation().push({
+          role: 'user',
+          meta: 'nudge',
+          content: 'Half the model calls for this request remain. If the requested deliverable is complete, answer now. Otherwise, finish only the required work and one relevant verification.',
+        });
+      }
       if (remaining === wrapUpWarningSteps(maxAgentSteps)) {
         conversation().push({
           role: 'user',
@@ -407,11 +446,13 @@ function createAgentLoop(rt) {
       // CLI addition: the source stopped here, which left a long exploration
       // with no answer at all. Ask once more with tools switched off, so the
       // model has to answer from what it found.
-      sink().info(`Agent reached the ${maxAgentSteps}-step safety cap — asking for a final answer without tools.`);
+      sink().info(forcedFinalReason
+        ? 'Repeated blocked calls — asking for a final answer without tools.'
+        : `Agent reached the ${maxAgentSteps}-step safety cap — asking for a final answer without tools.`);
       conversation().push({
         role: 'user',
         meta: 'nudge',
-        content: `You have used all ${maxAgentSteps} steps for this request and cannot call any more tools. Answer the user's request now from what you have found. Say plainly what you did not get to check.`,
+        content: forcedFinalReason || `You have used all ${maxAgentSteps} steps for this request and cannot call any more tools. Answer the user's request now from what you have found. Say plainly what you did not get to check.`,
       });
       try {
         const prepared = await fitRequest({ model, prompt, agentTools: [], contextLength });

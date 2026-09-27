@@ -58,6 +58,16 @@ test('unattended, a destructive command is denied even with --yes, without askin
   assert.match(toolMessages(runtime)[0].content, /not permitted/);
 });
 
+test('unattended process stop is denied even with --yes', async (t) => {
+  const { host, runtime } = await run(t, {
+    turns: [call('run_command', { command: 'lsof -ti:3000 | xargs kill 2>/dev/null' }), done],
+    autoApprove: true,
+    interactive: false,
+  });
+  assert.equal(host.asked.approvals.length, 0);
+  assert.match(toolMessages(runtime)[0].content, /not permitted/);
+});
+
 test('a sensitive read always asks, even with auto-approve', async (t) => {
   const cwd = project();
   fs.writeFileSync(path.join(cwd, '.env'), 'SECRET=hunter2\n');
@@ -156,6 +166,18 @@ test('a call that returned the same result twice is not run a third time, until 
   assert.match(results[4], /changed/, 'the edit reset the guard');
   assert.equal(host.asked.approvals.length, 0);
   assert.ok(runtime.rt.session.conversation.some((m) => m.meta === 'nudge' && /blocked for repeating: run_command/.test(m.content)));
+});
+
+test('a second read of an unchanged file is blocked, and two blocked calls end the turn', async (t) => {
+  const read = call('read_file', { path: 'README.md' });
+  const { runtime, fake, result } = await run(t, { turns: [read, read, read, done] });
+  const results = toolMessages(runtime).map((message) => message.content);
+  assert.equal(results[0], 'hello\n');
+  assert.match(results[1], /already read this unchanged file/);
+  assert.match(results[2], /already read this unchanged file/);
+  assert.equal(result.content, 'Done.');
+  assert.equal(fake.chats.filter((body) => body.tools).length, 3);
+  assert.ok(fake.chats.some((body) => !body.tools && /repeated the same blocked tool call/i.test(String(body.messages.at(-1)?.content))));
 });
 
 test('the same call with a different result is not a repeat', async (t) => {
