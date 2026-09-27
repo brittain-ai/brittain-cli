@@ -121,7 +121,7 @@ async function startRepl({ options, positionals, env, stdin, stdout, stderr, key
   } else {
     repl.start();
   }
-  return exited;
+  return exited.finally(() => rt.tools.stopAllManagedProcesses());
 }
 
 module.exports = { needsSetup, startRepl };

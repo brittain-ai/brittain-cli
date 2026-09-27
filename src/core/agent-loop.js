@@ -19,6 +19,8 @@ const { boundToolResult, toolResultLimit } = require('../lib/tool-result');
 const { outcomeOf } = require('../lib/ledger');
 const { costOf, addTurn: addCostTurn, describeTurn: describeTurnCost, describeTotals: describeCostTotals } = require('../lib/cost');
 const { RISKY_TOOLS, DESTRUCTIVE_TOOLS, isDestructiveCommand } = require('../lib/tools');
+const { CODE_TOOLS } = require('../lib/tools');
+const { missingRequired, schemaReveal } = require('../lib/tools/tool-index');
 const { MISSING_QUESTIONS, answersResult, normalizeQuestions } = require('../lib/tools/interact');
 const { createSubagentRunner } = require('./subagent');
 
@@ -123,7 +125,7 @@ function createAgentLoop(rt) {
 
   // Resolves one tool call and returns its result text. Every branch emits
   // exactly one stream:toolresult.
-  async function resolveCall({ name, args, model, cwd, autoApprove, activeToolNames, toolFailures, repeats, failureDirectives }) {
+  async function resolveCall({ name, args, model, cwd, autoApprove, activeToolNames, stubbedNames, toolFailures, repeats, failureDirectives }) {
     const emit = (result, denied) => sink().emit('stream:toolresult', { name, result: preview(result), ...(denied ? { denied: true } : {}) });
     const approveThenRun = async (promptKind, deniedText, label) => {
       const decision = await rt.approvalFlow.resolveToolCall(name, args, { autoApprove, promptKind });
@@ -157,6 +159,14 @@ function createAgentLoop(rt) {
       const result = `Error: Tool unavailable for this turn: ${name}. Continue without it.`;
       emit(result, true);
       return { result };
+    }
+    if (stubbedNames.has(name)) {
+      const fullDefinition = CODE_TOOLS.find((tool) => tool.function.name === name);
+      if (missingRequired(fullDefinition, args).length) {
+        const result = schemaReveal(fullDefinition);
+        emit(result);
+        return { result };
+      }
     }
     if (rt.run.stopRequested) return { result: 'Cancelled by user.' };
     if (name === 'run_subagent') {
@@ -207,8 +217,6 @@ function createAgentLoop(rt) {
     const messages = () => [{ role: 'system', content: prompt }, ...modelReadyMessages(conversation())];
     // report the window we actually run with, not the model's theoretical max
     const contextLength = await rt.models.effectiveContext(model);
-    const agentTools = rt.prompts.activeToolDefs();
-    const activeToolNames = new Set(agentTools.map((definition) => definition.function.name));
     // For models that support thinking, always send an explicit true/false —
     // omitting the param makes Ollama think by default, ignoring the toggle.
     const useThink = await rt.models.thinkValue(model, think);
@@ -237,6 +245,9 @@ function createAgentLoop(rt) {
     let psychosisRetried = false;
     let deliberationNudges = 0;
     for (let step = 0; step < maxAgentSteps; step++) {
+      const agentTools = rt.prompts.activeToolDefs();
+      const activeToolNames = new Set(agentTools.map((definition) => definition.function.name));
+      const stubbedNames = new Set(agentTools.filter((definition) => definition.function.parameters.additionalProperties === true).map((definition) => definition.function.name));
       let content, thinking, toolCalls, stats;
       try {
         const prepared = await fitRequest({ model, prompt, agentTools, contextLength });
@@ -359,7 +370,7 @@ function createAgentLoop(rt) {
 
         sink().toolCall({ name, args });
         const { result, repeatedCallBlocked, stats: subagentStats } = await resolveCall({
-          name, args, model, cwd, autoApprove, activeToolNames, toolFailures, repeats, failureDirectives,
+          name, args, model, cwd, autoApprove, activeToolNames, stubbedNames, toolFailures, repeats, failureDirectives,
         });
 
         // A subagent's model calls are part of what this message cost.
@@ -369,7 +380,7 @@ function createAgentLoop(rt) {
         }
         // Match the denial sentences rather than a UI label, or every denial
         // would count as a success and denied writes would be ledgered.
-        const toolOutcome = outcomeOf(result);
+        const toolOutcome = outcomeOf(result, name);
         if (toolOutcome === 'denied') deniedCalls += 1;
         rt.state.recordToolTelemetry(result, toolOutcome === 'denied');
         if (repeatedCallBlocked) {
@@ -427,7 +438,7 @@ function createAgentLoop(rt) {
         // The last model statistics do not include tool results that arrived
         // after generation. Estimate the request as it exists now, including
         // tool definitions, so compaction runs before the next model call.
-        const estimatedNow = estimateContextTokens(messages()) + estimateTokens(agentTools);
+        const estimatedNow = estimateContextTokens(messages()) + estimateTokens(rt.prompts.activeToolDefs());
         const used = Math.max(measured, estimatedNow);
         if (shouldAutoCompact(used, contextLength)) {
           sink().info(`Context past ${compactPercent()}% — auto-compacting…`);

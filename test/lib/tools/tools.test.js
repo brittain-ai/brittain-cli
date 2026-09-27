@@ -53,8 +53,9 @@ test('semantic navigation outlines definitions and finds symbols', async (t) => 
   assert.equal(symbols.count, 2);
   assert.deepEqual(symbols.results.map((item) => item.path), ['src/sample.js', 'src/worker.py']);
 
-  // Pruned: find_references is not in v1, and is refused as an unknown tool.
-  assert.match(await executeTool('find_references', { name: 'SampleService' }, cwd), /unknown tool/);
+  const references = JSON.parse(await executeTool('find_references', { name: 'SampleService' }, cwd));
+  assert.equal(references.count, 3);
+  assert.deepEqual(references.results.map((item) => item.line), [1, 5, 6]);
 });
 
 

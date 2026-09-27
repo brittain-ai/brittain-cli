@@ -5,8 +5,7 @@
 //
 // Pruned (docs/PLAN.md §4.4): every line about browser tools, run_subagent, online
 // research, attachments, calculate, research logs, and the no-screen (remote)
-// addendum. The tool-index/stubbing machinery is not ported (§4.1): v1 sends
-// every schema in full, and the budget test holds the total down instead.
+// addendum. Cold tool schemas are short until the model calls a tool.
 // chatSystemPrompt is gone with chat mode (brittain.app covers chat).
 //
 // Memory, pinned content, BRITTAIN.md, and user-wide instructions are appended
@@ -16,11 +15,14 @@ const fs = require('fs');
 const path = require('path');
 const workspace = require('../lib/workspace');
 const { CODE_TOOLS, SUBAGENT_TOOLS } = require('../lib/tools');
+const { indexToolDefs, revealedToolNames } = require('../lib/tools/tool-index');
 const { pinnedFilesPrompt, pinnedMessagesPrompt } = require('../lib/context-controls');
 const { estimateTokens } = require('./context-hygiene');
 
 const MEMORY_PROMPT_CHARS = 4000;
 const PROJECT_INSTRUCTIONS_CHARS = 12_000;
+const COLD_TOOLS = new Set(['find_references', 'check_port_usage', 'start_process', 'process_status', 'stop_process', 'local_http_request']);
+const HOT_TOOLS = new Set(CODE_TOOLS.map((tool) => tool.function.name).filter((name) => !COLD_TOOLS.has(name)));
 
 function capMemory(memory, what) {
   return memory.length > MEMORY_PROMPT_CHARS
@@ -47,7 +49,7 @@ function createPrompts(rt) {
       '- Commit to an approach and act. If you notice yourself reconsidering a choice you already made, make the smallest change that tests it. A tool result is evidence.',
       '- Verify your work: read a file back after editing it, or run a command that proves the change works. Do not claim success without evidence from a tool result.',
       '- Prefer apply_patch for precise multi-file edits: preview first, then apply the same patch. Use edit_file for one small exact replacement. Use write_file only for new files or full rewrites of files you have read completely. Never write placeholders like "... existing code ...".',
-      `- Commands run with a 60 second timeout; do not start interactive programs or servers that never exit.`,
+      '- run_command has a 60 second timeout. Use start_process for local servers or watchers, process_status to inspect them, and stop_process when done.',
       '- If a tool call errors twice, stop and ask the user for guidance with ask_user. If the user denies a tool call, do not retry it.',
       '- You cannot see a browser, a GUI, or the screen. For a bug that only shows there (blank page, missing element), ask the user with ask_user for the browser console errors or what they see, rather than guessing.',
       '- For ambiguous or destructive decisions, ask with ask_user and give 2-4 concrete options. Otherwise state your assumption in one line and proceed.',
@@ -107,8 +109,10 @@ function createPrompts(rt) {
   // Single source of truth for the tool payload actually sent with a request.
   // The context inspector calls this too, so "what will actually be sent"
   // cannot silently drift from what runAgentTurn sends.
-  function activeToolDefs() {
-    return CODE_TOOLS;
+  function activeToolDefs(extraRevealed = new Set()) {
+    const revealed = revealedToolNames(rt.session.conversation);
+    for (const name of extraRevealed) revealed.add(name);
+    return indexToolDefs(CODE_TOOLS, { hot: HOT_TOOLS, revealed });
   }
 
   // The fixed per-request overhead: system prompt + tool schemas. Both are sent
@@ -129,7 +133,7 @@ function createPrompts(rt) {
     return SUBAGENT_TOOLS;
   }
 
-  return { activeToolDefs, fixedOverheadTokens, subagentToolDefs, systemPrompt };
+  return { activeToolDefs, fixedOverheadTokens, subagentToolDefs, systemPrompt, coldToolNames: COLD_TOOLS };
 }
 
 module.exports = { createPrompts };

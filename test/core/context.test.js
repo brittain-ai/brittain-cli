@@ -10,6 +10,7 @@ const os = require('node:os');
 const path = require('node:path');
 
 const { createRuntime } = require('../../src/core/runtime');
+const { CODE_TOOLS } = require('../../src/lib/tools');
 const { formatContext } = require('../../src/core/context-inspector');
 const { createFakeProvider } = require('../helpers/fake-provider');
 const { collect, createTestHost, settingsFor } = require('../helpers/test-host');
@@ -149,7 +150,7 @@ test('/context lists the system prompt, the tools, and each message with its tok
   await runtime.commands['context.control']({ action: 'pin-file', path: 'README.md', cwd });
   const result = await runtime.commands['context.inspect']();
   assert.equal(result.ok, true, result.error);
-  assert.equal(result.toolCount, 18);
+  assert.equal(result.toolCount, CODE_TOOLS.length);
   assert.equal(result.contextLength, 32_768);
   assert.ok(result.systemTokens > 0 && result.toolTokens > 1000);
   assert.deepEqual(result.rows.map((row) => row.role), ['user', 'assistant', 'tool', 'assistant']);
@@ -160,7 +161,7 @@ test('/context lists the system prompt, the tools, and each message with its tok
   const text = formatContext(result);
   assert.match(text, /^Context: [\d,]+ of 32,768 tokens \(\d+%\) · alpha-model/);
   assert.match(text, /system prompt\s+[\d,]+/);
-  assert.match(text, /tools \(18\)\s+[\d,]+/);
+  assert.match(text, new RegExp(`tools \\(${CODE_TOOLS.length}\\)\\s+[\\d,]+`));
   assert.match(text, /messages \(4\)\s+[\d,]+/);
   assert.match(text, /pinned files: README\.md/);
   assert.match(text, /3 tool:read_file\s+\d+/);

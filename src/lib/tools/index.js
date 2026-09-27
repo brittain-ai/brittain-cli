@@ -17,23 +17,27 @@ const search = require('./search');
 const git = require('./git');
 const shell = require('./shell');
 const memory = require('./memory');
+const projectCheck = require('./project-check');
+const processes = require('./processes');
 
 const HANDLERS = {
   ...files.handlers,
   ...search.handlers,
   ...git.handlers,
   ...shell.handlers,
+  ...projectCheck.handlers,
 };
 
 function createToolExecutor({ dataDir }) {
   const dir = () => (typeof dataDir === 'function' ? dataDir() : dataDir);
   const trackRewrite = files.createRewriteTracker();
+  const managed = processes.createManagedTools();
 
   async function executeTool(name, args, cwd) {
     // futility tracking must see every call so any non-write action resets it
     const futilityNote = trackRewrite(name, name === 'write_file' && args?.path ? files.resolveInside(cwd, args.path) : '');
     if (name === 'remember') return memory.remember(dir(), args || {}, cwd);
-    const handler = HANDLERS[name];
+    const handler = managed.handlers[name] || HANDLERS[name];
     if (!handler) return `Error: unknown tool "${name}"`;
     return name === 'write_file'
       ? handler(args || {}, cwd, futilityNote)
@@ -42,6 +46,7 @@ function createToolExecutor({ dataDir }) {
 
   return {
     executeTool,
+    stopAllManagedProcesses: managed.stopAll,
     memoryPath: (cwd) => memory.memoryPath(dir(), cwd),
     readMemory: (cwd) => memory.readMemory(dir(), cwd),
     legacyMemoryPath: () => memory.legacyMemoryPath(dir()),

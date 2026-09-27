@@ -173,10 +173,15 @@ written into it.
   `*.key` and anything listed in a `.brittainprotect` file are never written.
 - Supervised (the default) asks before every edit, move, delete and command.
   Trusted (`/auto on`, `--yes`) runs those without asking.
+- `run_project_check` lists or runs checks from a project manifest. The local
+  server tools start, inspect, and stop only processes started in this CLI
+  session. `local_http_request` accepts only loopback URLs and does not follow
+  redirects. These tools use short schemas until the model first calls them.
 - Destructive commands (`rm -rf`, `git push`, `sudo`, `git reset --hard`, `kill`,
   a download piped into a shell, and so on), reads of secrets (`.env`, keys,
   `.npmrc`), and anything that looks like it moves money always ask, even
-  in trusted mode. With nobody there to ask, they are denied.
+  in trusted mode. HTTP methods that can change local state also ask. With
+  nobody there to ask, they are denied.
 - Every run first snapshots the working tree to a hidden Git ref, so
   `/undo` can put it back even if you never committed.
 - Memory and `BRITTAIN.md` are given to the model as data, not as

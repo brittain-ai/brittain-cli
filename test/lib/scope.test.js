@@ -20,16 +20,18 @@ const V1_CODE_TOOLS = [
 ];
 
 // docs/PLAN.md §10 roadmap item 2.
-const ADDED_AFTER_V1 = ['run_subagent'];
+const ADDED_AFTER_V1 = [
+  'run_subagent', 'run_project_check', 'find_references', 'check_port_usage',
+  'start_process', 'process_status', 'stop_process', 'local_http_request',
+];
 const CODE_TOOL_SET = [...V1_CODE_TOOLS, ...ADDED_AFTER_V1];
 
 // Every tool the app defines that v1 leaves behind (brittain-code@fa01d50 tools.js).
 const NOT_IN_V1 = [
   'calculate', 'pdf_info', 'pdf_render', 'pdf_fill_form', 'pdf_stamp', 'pdf_pages',
-  'pdf_merge', 'edit_files', 'run_project_check', 'find_references', 'search_local_docs',
+  'pdf_merge', 'edit_files', 'search_local_docs',
   'append_file', 'create_directory', 'file_metadata', 'copy_file',
-  'get_environment_variables', 'check_port_usage', 'start_process', 'process_status',
-  'stop_process', 'local_http_request', 'browser_open', 'browser_snapshot', 'browser_click',
+  'get_environment_variables', 'browser_open', 'browser_snapshot', 'browser_click',
   'browser_type', 'browser_console', 'browser_screenshot', 'browser_close',
   'create_git_branch', 'revert_to_last_commit', 'get_git_graph', 'list_processes',
   'initiate_research_session', 'record_observation', 'finalize_research', 'web_search',
