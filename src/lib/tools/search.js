@@ -1,12 +1,12 @@
 // Ported from brittain-code@fa01d50fe707a9f72dfbad3550a56fe60effa14b:tools.js
 'use strict';
 
-// Search and navigation tools: search_files, project_outline, find_symbol.
-// Pruned: find_references and search_local_docs (not in v1).
+// Search and navigation tools: search_files, project_outline, find_symbol,
+// find_references. Pruned: search_local_docs.
 
 const path = require('path');
 const fs = require('fs');
-const { findSymbol, projectOutline } = require('./semantic-navigation');
+const { findReferences, findSymbol, projectOutline } = require('./semantic-navigation');
 const { resolveInside, truncate, walkDir, globToRegex } = require('./files');
 
 async function searchFiles(args, cwd) {
@@ -63,10 +63,17 @@ async function findSymbolTool(args, cwd) {
   return truncate(JSON.stringify(findSymbol(fs.realpathSync(cwd), target, args), null, 2));
 }
 
+async function findReferencesTool(args, cwd) {
+  const target = resolveInside(cwd, args.path);
+  try { return truncate(JSON.stringify(findReferences(fs.realpathSync(cwd), target, args), null, 2)); }
+  catch (error) { return `Error: ${error.message}`; }
+}
+
 module.exports = {
   handlers: {
     search_files: searchFiles,
     project_outline: projectOutlineTool,
     find_symbol: findSymbolTool,
+    find_references: findReferencesTool,
   },
 };

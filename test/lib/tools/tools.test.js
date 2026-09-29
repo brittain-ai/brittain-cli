@@ -53,8 +53,9 @@ test('semantic navigation outlines definitions and finds symbols', async (t) => 
   assert.equal(symbols.count, 2);
   assert.deepEqual(symbols.results.map((item) => item.path), ['src/sample.js', 'src/worker.py']);
 
-  // Pruned: find_references is not in v1, and is refused as an unknown tool.
-  assert.match(await executeTool('find_references', { name: 'SampleService' }, cwd), /unknown tool/);
+  const references = JSON.parse(await executeTool('find_references', { name: 'SampleService' }, cwd));
+  assert.equal(references.count, 3);
+  assert.deepEqual(references.results.map((item) => item.line), [1, 5, 6]);
 });
 
 
@@ -314,6 +315,7 @@ test('destructive commands are classified; routine ones are not', () => {
     'echo boom > /etc/hosts', 'rm ~/Documents/file.txt', 'mv thing /usr/local/bin/thing',
     // real device writes stay destructive even though /dev/null does not
     'dd if=/dev/zero > /dev/disk0', 'echo x > /dev/rdisk2',
+    'lsof -ti:3000 | xargs kill 2>/dev/null; sleep 1', 'pkill -f "node server.js"',
   ];
   const routine = [
     'node test.js', 'npm test', 'npx tsc', 'git status', 'git diff', 'git add -A',

@@ -60,6 +60,7 @@ async function runPrintMode({ prompt, options, host, env, stdout, stderr, io }) 
   } finally {
     process.removeListener('SIGINT', onSigint);
     unsubscribe();
+    await rt.tools.stopAllManagedProcesses();
   }
 
   const deniedCalls = Math.max(denied, result.deniedCalls || 0);

@@ -75,7 +75,8 @@ function classifyToolCall(name, args) {
   return {
     name,
     destructive: DESTRUCTIVE_TOOLS.has(name)
-      || (name === 'run_command' && isDestructiveCommand(args?.command)),
+      || (name === 'run_command' && isDestructiveCommand(args?.command))
+      || (name === 'local_http_request' && !['GET', 'HEAD'].includes(String(args?.method || 'GET').toUpperCase())),
     sensitive: isSensitiveToolCall(name, args),
     risky: RISKY_TOOLS.has(name),
     financial: looksFinancial(name, args),

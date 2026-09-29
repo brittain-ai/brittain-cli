@@ -33,8 +33,14 @@ const VERB = {
   apply_patch: 'patched',
 };
 
-function outcomeOf(result) {
+function outcomeOf(result, name = '') {
   const text = String(result || '');
+  if (name === 'run_project_check' && text.trimStart().startsWith('{')) {
+    try {
+      const check = JSON.parse(text);
+      if (check.timed_out || check.signal || (check.exit_code !== undefined && check.exit_code !== 0)) return 'error';
+    } catch {}
+  }
   // Denial strings are authored in main.js and all open the same way. Matching
   // the sentence rather than a UI label keeps this accurate.
   if (/^\s*The user (denied|cancelled|reviewed)\b/i.test(text)) return 'denied';
@@ -127,15 +133,15 @@ function buildLedger(messages) {
 
   for (const { name, args, result } of pairCalls(messages)) {
     toolCalls += 1;
-    const outcome = outcomeOf(result);
+    const outcome = outcomeOf(result, name);
 
     if (outcome === 'denied') denied.push({ tool: name, target: describeTarget(name, args) });
     if (outcome === 'error') {
       errors.push({ tool: name, target: describeTarget(name, args), message: firstLine(result) });
     }
 
-    if (name === 'run_command') {
-      commands.push({ command: firstLine(args.command, 120), outcome });
+    if (name === 'run_command' || name === 'run_project_check') {
+      commands.push({ command: name === 'run_command' ? firstLine(args.command, 120) : `project check: ${firstLine(args.check || 'list', 100)}`, outcome });
     } else if (MUTATION_PATH_ARG[name]) {
       touchFile(files, args[MUTATION_PATH_ARG[name]], VERB[name], outcome);
     } else if (MUTATION_MOVE.has(name)) {

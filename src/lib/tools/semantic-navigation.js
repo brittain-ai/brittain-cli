@@ -170,9 +170,50 @@ function findSymbol(projectRoot, target, args = {}) {
   return { name, results, count: results.length, truncated: found.truncated || results.length >= maxResults };
 }
 
-// Pruned: findReferences (find_references is not in the v1 tool set).
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function findReferences(projectRoot, target, args = {}) {
+  const name = String(args.name || '');
+  if (!/^[A-Za-z_$][\w$]*$/.test(name)) throw new Error('name must be one identifier without dots or spaces.');
+  const maxResults = boundedInteger(args.max_results, 100, 1, 500);
+  const maxFiles = boundedInteger(args.max_files, 500, 1, 2_000);
+  const includeDefinitions = args.include_definitions !== false;
+  const caseSensitive = args.case_sensitive !== false;
+  const matcher = new RegExp(`(^|[^A-Za-z0-9_$])(${escapeRegExp(name)})(?=$|[^A-Za-z0-9_$])`, caseSensitive ? 'g' : 'gi');
+  const found = sourceFiles(target, maxFiles);
+  const results = [];
+  for (const filePath of found.files) {
+    const parsed = readSymbols(filePath);
+    const definitionLines = new Set(parsed.symbols
+      .filter((item) => (caseSensitive ? item.name === name : item.name.toLowerCase() === name.toLowerCase()))
+      .map((item) => item.line));
+    for (let index = 0; index < parsed.lines.length; index += 1) {
+      const isDefinition = definitionLines.has(index + 1);
+      if (isDefinition && !includeDefinitions) continue;
+      matcher.lastIndex = 0;
+      let match;
+      while ((match = matcher.exec(parsed.lines[index])) !== null) {
+        results.push({
+          path: path.relative(projectRoot, filePath).split(path.sep).join('/'),
+          line: index + 1,
+          column: match.index + match[1].length + 1,
+          is_definition: isDefinition,
+          text: cleanSignature(parsed.lines[index]),
+        });
+        if (results.length >= maxResults) break;
+        if (match[0].length === 0) matcher.lastIndex += 1;
+      }
+      if (results.length >= maxResults) break;
+    }
+    if (results.length >= maxResults) break;
+  }
+  return { name, results, count: results.length, truncated: found.truncated || results.length >= maxResults };
+}
 
 module.exports = {
+  findReferences,
   findSymbol,
   projectOutline,
   symbolsForLine,

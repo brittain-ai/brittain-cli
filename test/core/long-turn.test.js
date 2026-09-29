@@ -176,6 +176,28 @@ test('at the step cap the model is warned first, then asked to answer with tools
   assert.equal(saved.at(-1).content, 'Final overview: ten modules of computed constants.');
 });
 
+test('a 50-step one-shot run gets a progress check halfway through', async (t) => {
+  const cwd = repo();
+  let calls = 0;
+  const fake = await createFakeProvider({
+    respond: (body) => {
+      if (!body.tools) return { text: 'Done.' };
+      calls += 1;
+      if (calls === 26) return { text: 'Done.' };
+      return { toolCalls: [{ name: 'get_file_lines', arguments: { path: `module${calls % FILES}.js`, start: calls } }] };
+    },
+  }).start();
+  t.after(() => fake.stop());
+  const host = createTestHost({ settings: { ...settingsFor('ollama', fake), maxAgentSteps: 50 } });
+  const runtime = createRuntime({ host, overrides: { cwd } });
+  const result = await runtime.commands.chat({ text: REQUEST, cwd });
+  assert.equal(result.content, 'Done.');
+  const agent = fake.chats.filter((body) => body.tools);
+  assert.equal(agent.length, 26);
+  assert.equal(agent[24].messages.some((m) => /Half the model calls/.test(String(m.content))), false);
+  assert.equal(agent[25].messages.some((m) => /Half the model calls/.test(String(m.content))), true);
+});
+
 test('the summarizer is asked for a line per file and sees more of each result', async (t) => {
   const cwd = repo();
   let reads = 0;
