@@ -176,9 +176,9 @@ function createAgentLoop(rt) {
         emit(result);
         return { result };
       }
-      const { result, stats } = await subagents.runSubagent({ task, leadModel: model, cwd, autoApprove });
+      const { result, stats, denied } = await subagents.runSubagent({ task, leadModel: model, cwd, autoApprove });
       emit(result);
-      return { result, stats };
+      return { result, stats, subagentDenied: denied };
     }
     if (name === 'ask_user') {
       const questions = normalizeQuestions(args);
@@ -369,7 +369,7 @@ function createAgentLoop(rt) {
         if (!args || typeof args !== 'object') args = {};
 
         sink().toolCall({ name, args });
-        const { result, repeatedCallBlocked, stats: subagentStats } = await resolveCall({
+        const { result, repeatedCallBlocked, stats: subagentStats, subagentDenied } = await resolveCall({
           name, args, model, cwd, autoApprove, activeToolNames, stubbedNames, toolFailures, repeats, failureDirectives,
         });
 
@@ -382,6 +382,8 @@ function createAgentLoop(rt) {
         // would count as a success and denied writes would be ledgered.
         const toolOutcome = outcomeOf(result, name);
         if (toolOutcome === 'denied') deniedCalls += 1;
+        // A read the scout was refused is a denied call of this turn too.
+        if (subagentDenied) deniedCalls += subagentDenied;
         rt.state.recordToolTelemetry(result, toolOutcome === 'denied');
         if (repeatedCallBlocked) {
           const signature = callSignature(name, args);

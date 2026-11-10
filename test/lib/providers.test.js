@@ -34,7 +34,6 @@ test('Brittain mode sends its key as the configured auth header, and none withou
   assert.deepEqual(providersWith().resolve('brittain').extraHeaders, {});
   assert.equal(providersWith().resolve('brittain').model, 'run4c-step-0116');
   assert.equal(providersWith().resolve('brittain').defaultContext, 32_768);
-  assert.equal(brittain.isBrittain4Model('run4c-step-0116'), true);
 });
 
 test('each mode resolves to its own transport and endpoint', () => {

@@ -11,7 +11,7 @@
 //   scout    read-only survey of an existing project        (skipped if empty)
 //   plan     one call, no tools, thinking off               -> validated plan
 //   review   the human reads the plan and can revise it
-//   per task: checkpoint -> coder -> the HARNESS runs the Check -> verifier
+//   per task: coder -> the HARNESS runs the Check -> verifier
 //             -> mark done with evidence, or retry once, or stop
 //
 // What is deliberately not a model decision: which task is next, whether a
@@ -201,7 +201,9 @@ function createPipeline(rt) {
     return { verdict, fails };
   }
 
-  async function runTask({ plan, task, model, cwd, autoApprove, context, failure: carried = '' }) {
+  // `tally.denied` counts every call a human declined or nobody was there to
+  // approve, across the coder, the Check and the verifier.
+  async function runTask({ plan, task, model, cwd, autoApprove, context, tally, failure: carried = '' }) {
     let failure = carried;
     let lastOutput = '';
     for (let attempt = 1; attempt <= TASK_ATTEMPTS; attempt++) {
@@ -211,7 +213,8 @@ function createPipeline(rt) {
 
       const before = snapshot(cwd);
       const brief = taskBrief(plan, task, { context: clip(context, BRIEF_CONTEXT_CHARS), failure });
-      await rt.agentLoop.runSubagent({ task: brief, leadModel: model, cwd, autoApprove, role: 'coder' });
+      const coded = await rt.agentLoop.runSubagent({ task: brief, leadModel: model, cwd, autoApprove, role: 'coder' });
+      tally.denied += coded.denied || 0;
       if (rt.run.stopRequested) return { ok: false, stopped: true, reason: 'Stopped.' };
 
       // Evidence comes from the harness, not from the coder's own report: what
@@ -224,6 +227,7 @@ function createPipeline(rt) {
       const check = await runCheck({ command: task.check, cwd, autoApprove });
       lastOutput = check.output;
       if (!check.ok) {
+        if (check.denied) tally.denied += 1;
         if (check.denied) return { ok: false, denied: true, reason: 'You declined to run the check, so the task cannot be confirmed.', output: check.output };
         failure = `The check \`${task.check}\` ${check.timedOut ? 'timed out' : `exited ${check.code}`}. Its output:\n${tail(check.output, FAILURE_CHARS)}`;
         info(`  check failed (${check.timedOut ? 'timed out' : `exit ${check.code}`})`);
@@ -251,6 +255,7 @@ function createPipeline(rt) {
           'Exit 0 only means the command ran. Read the code and judge whether each behaviour really works.',
         ].join('\n'),
       });
+      tally.denied += judged.denied || 0;
       const { verdict, fails } = verdictOf(judged.report);
       if (verdict === 'FAIL') {
         failure = `The check passed, but a reviewer found defects:\n${fails.join('\n') || clip(judged.report, FAILURE_CHARS)}`;
@@ -282,7 +287,7 @@ function createPipeline(rt) {
     const text = summarize(plan, opts);
     rt.session.conversation.push({ role: 'assistant', content: text });
     say(text);
-    return { lastContent: text, lastStats: null, deniedCalls: 0, incomplete: !!opts.incomplete };
+    return { lastContent: text, lastStats: null, deniedCalls: opts.deniedCalls || 0, incomplete: !!opts.incomplete };
   }
 
   // goal empty: resume the plan already in .brittain/plan.md.
@@ -292,6 +297,7 @@ function createPipeline(rt) {
     const attended = !!rt.host.interactive();
     let plan = null;
     let context = '';
+    const tally = { denied: 0 };
     goal = String(goal || '').trim();
 
     if (!goal) {
@@ -309,6 +315,7 @@ function createPipeline(rt) {
           task: `Survey this directory for someone about to build this: ${goal}\nReport: the files that exist, the language and libraries in use, the module system and code style, and how tests are run. Quote the small facts that matter (package.json scripts, entry points). If it is unrelated to the goal, say so.`,
         });
         context = scouted.report;
+        tally.denied += scouted.denied || 0;
       }
 
       info('Planning…');
@@ -340,7 +347,7 @@ function createPipeline(rt) {
     // ---- the loop: no model decides what happens next ----
     let stoppedNote = '';
     for (let task = nextPending(plan); task; task = nextPending(plan)) {
-      let outcome = await runTask({ plan, task, model, cwd, autoApprove, context });
+      let outcome = await runTask({ plan, task, model, cwd, autoApprove, context, tally });
       // A small model that is stuck is often one sentence from unstuck, and a
       // human is the cheapest way to say it. Offer a hint instead of giving up.
       for (let hints = 0; !outcome.ok && !outcome.stopped && !outcome.denied && attended && hints < MAX_HINTS; hints++) {
@@ -350,7 +357,7 @@ function createPipeline(rt) {
         const hint = String(answers?.[0] ?? '').trim();
         if (!hint || /^stop\b/i.test(hint)) break;
         info('  retrying with your hint…');
-        outcome = await runTask({ plan, task, model, cwd, autoApprove, context, failure: `${outcome.reason}\nThe user says: ${hint}` });
+        outcome = await runTask({ plan, task, model, cwd, autoApprove, context, tally, failure: `${outcome.reason}\nThe user says: ${hint}` });
       }
       if (outcome.stopped) { stoppedNote = 'Stopped. Run `/build` with no goal to continue from the plan.'; break; }
       if (outcome.ok) {
@@ -365,7 +372,7 @@ function createPipeline(rt) {
       }
     }
 
-    return finish(plan, { note: stoppedNote, undoable: !!start, incomplete: plan.tasks.some((t) => t.status !== 'done') });
+    return finish(plan, { note: stoppedNote, undoable: !!start, deniedCalls: tally.denied, incomplete: plan.tasks.some((t) => t.status !== 'done') });
   }
 
   return { build, loadPlan, planPath };

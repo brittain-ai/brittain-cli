@@ -9,7 +9,7 @@ loop, tools, safety rules, memory and compaction, without the desktop app.
 - Small. The system prompt and tool schemas come to about 2,000 tokens in
   total (the desktop app sends about 8,700), which matters on a model
   with a 32k or 56k window.
-- Works with Brittain 4 out of the box, and with any OpenAI-compatible
+- Works with the Brittain API out of the box, and with any OpenAI-compatible
   provider or a local Ollama.
 
 ## Install
@@ -28,7 +28,7 @@ brittain
 ```
 
 That starts an interactive session in the current directory, talking to
-Brittain 4. If the server asks for a key:
+the Brittain API. If the server asks for a key:
 
 ```bash
 brittain login
