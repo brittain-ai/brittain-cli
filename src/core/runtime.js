@@ -28,6 +28,7 @@ const { createHistory } = require('./history');
 const { createTitles } = require('./title');
 const { createCheckpoints } = require('./checkpoints');
 const { createCommands } = require('./commands');
+const { createPipeline } = require('./pipeline');
 const { createCompactionRunner } = require('./compaction-runner');
 const { createContextInspector } = require('./context-inspector');
 const { createMemory } = require('./memory');
@@ -100,6 +101,7 @@ function createRuntime({ host, env = process.env, overrides = {} } = {}) {
   rt.titles = createTitles(rt);
   rt.history = createHistory(rt);
   rt.services.checkpoints = createCheckpoints(rt);
+  rt.pipeline = createPipeline(rt);
   const chatJobs = createChatJobs(rt);
   rt.chatJobs.persistActive = chatJobs.persistActive;
   rt.chatJobs.submitChat = chatJobs.submitChat;

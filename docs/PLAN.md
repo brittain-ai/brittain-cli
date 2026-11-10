@@ -582,13 +582,63 @@ to Ollama works with a local model.
 2. ~~Subagents (`run_subagent`), and a scout-model setting.~~ **Done (2026-09-23):** `run_subagent` with the source's read-only tool set, and the `subagentModel` setting (empty = the lead's model, on the lead's provider).
 3. Image and file attachments (`@path`).
 4. Jev compaction for Brittain 4.
-5. `/plan`, `/review`, `/orchestrate`, `/loop`, missions.
+5. `/plan`, `/review`, `/orchestrate`, `/loop`, missions. **Partly done
+   (2026-09-28):** `/build` (also `brittain build "<goal>"`) — see §10.1.
+   The rest stay out.
 6. MCP client (with trust), then Playwright MCP as the browser option.
 7. Unattended `brittain run`, parked calls, custom autonomy policies, sandbox.
 8. Daemon, triggers, heartbeats (launchd / systemd `--user`).
 9. Discord bridge.
 10. PDF tools, `calculate`.
 11. Tool index / schema stubbing if the tool count grows past the budget.
+
+### 10.1 `/build`: a code-driven orchestrator
+
+Built because Brittain 4's window is small. A first attempt at "make a todo
+app" in one agent turn spent ten of its twenty-five steps on a module-system
+question and reported success over two real bugs. So the orchestrator is code
+(`src/core/pipeline.js`), and the model is called for one narrow job at a
+time, each with a small prompt of its own:
+
+1. **scout** (read-only subagent) — only if the directory is not empty.
+2. **plan** — one call, no tools, thinking **off** (with it on, the same call
+   hit the repeat guard on two goals in three). The output is a fixed format
+   (`src/core/plan.js`) that code validates; a bad plan goes back once with the
+   errors. Saved to `.brittain/plan.md`.
+3. **review** — the human reads the plan, may type a change (up to twice), and
+   says yes. With nobody there, `--yes` builds without review; without it, the
+   plan is written and nothing is built.
+4. **per task**, in code: `coder` subagent with a brief (decisions, what earlier
+   tasks built, its task) → the **harness** runs the task's `Check` → a
+   read-only `verifier` subagent → mark done with evidence, retry once with the
+   failure in the brief, or stop. A failed task, with someone there, asks for
+   a hint (up to two) before giving up.
+
+What is deliberately not a model decision:
+
+- **Which task is next**, and **whether it is done.** A task is done only when
+  its Check exits 0 (`runCommandStatus`, a real exit status), the Check's
+  output reports no failure (a command that exits 0 while printing `✗` or
+  `# fail 2` is not a check), and the verifier does not veto. `markTask`
+  refuses `done` without evidence.
+- **Whether a Check is any good.** Plan validation rejects a Check that is a
+  sentence, a placeholder, or greps an error message through a pipe (stderr
+  does not cross it).
+- **What changed.** A before/after file snapshot (`src/core/snapshot.js`), not
+  the coder's report. Files outside the task's list are named to the verifier.
+- **Safety.** A coder's calls, and a planner-written Check, go through the same
+  approval gate as the lead's. Destructive, sensitive and financial calls always
+  ask; with nobody there they are denied. `--yes` does not change that.
+
+The verifier is a second opinion, not the gate: on real runs it passed code
+with a broken `done()`. The deterministic checks above are what caught the
+same bug. Known limits: one coder at a time; a plan that is wrong is built
+faithfully (the review step is the mitigation); `/undo` reverts the whole build
+(the checkpoint taken when it started); checkpoint `diffStat` misses untracked
+files (a ported bug, not used here).
+
+Exit codes for `brittain build`: `0` every task done, `1` a task failed or the
+run was stopped, `2` finished with denied calls.
 
 ---
 

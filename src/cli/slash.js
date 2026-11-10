@@ -8,6 +8,7 @@
 //   ui.line(text), ui.style, ui.pick(question, items, opts), ui.state,
 //   ui.page(text) — print, through a pager when taller than the terminal
 //   ui.color — whether output is colored
+//   ui.build(goal) — run /build (an empty goal resumes the saved plan)
 
 const { MODE_IDS } = require('../lib/providers');
 const { gitRun } = require('../lib/tools');
@@ -221,6 +222,12 @@ function createSlash({ runtime, ui, setupProvider }) {
         const result = await commands['git.commit']({ message: rest });
         ui.line(result.ok ? result.out : result.error);
       },
+    },
+    {
+      name: 'build',
+      usage: '/build [goal]',
+      summary: 'Plan, then build task by task (no goal: resume the plan)',
+      run: async ({ rest }) => { await ui.build(rest); },
     },
     {
       name: 'undo',

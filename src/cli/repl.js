@@ -124,6 +124,8 @@ function createRepl({
     color,
     page,
     line: (text) => renderer.line(text),
+    // CLI addition: /build. An empty goal resumes the plan in .brittain/plan.md.
+    build: (goal) => send(goal, () => commands.build({ goal, autoApprove: state.autoApprove })),
     // A numbered pick that reads its answer from this same interface.
     pick: async (question, items, { current } = {}) => {
       items.forEach((item, index) => {
@@ -247,12 +249,13 @@ function createRepl({
 
   const unsubscribe = events.subscribe((channel, payload) => renderer.handle(channel, payload));
 
-  async function send(text) {
+  // `start` overrides how the run begins: /build starts the pipeline, not a chat turn.
+  async function send(text, start = () => commands.chat({ text, autoApprove: state.autoApprove })) {
     running = true;
     const before = { ...rt.session.usage.main };
     let result;
     try {
-      result = await commands.chat({ text, autoApprove: state.autoApprove });
+      result = await start();
     } finally {
       running = false;
     }

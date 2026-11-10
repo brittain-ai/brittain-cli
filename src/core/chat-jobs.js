@@ -4,6 +4,10 @@
 // A chat message, start to finish: into the conversation, through the agent
 // loop, onto disk, and named.
 //
+// CLI addition: a job with `build` set runs the /build pipeline (core/pipeline.js)
+// instead of the agent loop; everything around it — the session, the checkpoint,
+// the saved chat, the stop button — is the same.
+//
 // Pruned: attachments, auto-branch, the end-of-run report card, chat mode
 // (brittain.app covers chat; every run works in a directory), and the
 // renderer's background queue. The source staged every message into history
@@ -93,8 +97,10 @@ function createChatJobs(rt) {
     const startedAt = Date.now();
     let outcome = 'ok';
     try {
-      const turn = await rt.agentLoop.runAgentTurn({ model, cwd, autoApprove, think });
-      return { ok: true, content: turn.lastContent, deniedCalls: turn.deniedCalls, stats: turn.lastStats };
+      const turn = job.build
+        ? await rt.pipeline.build({ goal: job.goal, model, cwd, autoApprove })
+        : await rt.agentLoop.runAgentTurn({ model, cwd, autoApprove, think });
+      return { ok: true, content: turn.lastContent, deniedCalls: turn.deniedCalls, stats: turn.lastStats, ...(turn.incomplete ? { incomplete: true } : {}) };
     } catch (err) {
       if (err.name === 'AbortError') { outcome = 'stopped'; return { ok: true, stopped: true }; }
       outcome = 'failed';
@@ -128,6 +134,7 @@ function createChatJobs(rt) {
       cwd: payload.cwd || rt.config.cwd,
       autoApprove: payload.autoApprove ?? settings.autoApprove,
       think: payload.think ?? settings.codeThink,
+      ...(payload.build ? { build: true, goal: String(payload.goal || '').trim() } : {}),
     };
 
     rt.chatJobs.active = job;

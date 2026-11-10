@@ -22,6 +22,7 @@ Usage:
 
 Commands:
   brittain ask "<prompt>"         One model call, no tools; streams the answer
+  brittain build "<goal>"         Plan, then build task by task (no goal: resume the plan)
   brittain provider [mode]        Show or switch the provider: brittain, openai, ollama
   brittain models                 List models for the active provider
   brittain login [--provider m]   Save an API key (brittain or openai) in the keychain
@@ -43,7 +44,7 @@ Options:
   -v, --version                   Print the version
 `;
 
-const SUBCOMMANDS = new Set(['ask', 'config', 'login', 'logout', 'provider', 'models']);
+const SUBCOMMANDS = new Set(['ask', 'build', 'config', 'login', 'logout', 'provider', 'models']);
 
 function createIO({ stdout, stderr, env }) {
   // Last line of defence for docs/PLAN.md §5.2: nothing the CLI prints can carry
@@ -242,6 +243,14 @@ async function main(argv, {
           model: { type: 'string' },
           'show-thinking': { type: 'boolean' },
         } : {}),
+        ...(subcommand === 'build' ? {
+          provider: { type: 'string' },
+          model: { type: 'string' },
+          cwd: { type: 'string' },
+          yes: { type: 'boolean' },
+          'output-format': { type: 'string' },
+          verbose: { type: 'boolean' },
+        } : {}),
       },
     });
   } catch (error) {
@@ -272,6 +281,7 @@ async function main(argv, {
     if (subcommand === 'logout') return await logoutCommand(values, ctx, io);
     if (subcommand === 'provider') return await providerCommand(positionals, ctx, io, { stdin });
     if (subcommand === 'models') return await modelsCommand(positionals, ctx, io);
+    if (subcommand === 'build') return await runPrintMode({ prompt: positionals.join(' '), options: values, host: ctx.host, env, stdout, stderr, io, build: true });
     if (subcommand === 'ask') return await askCommand(positionals, values, ctx, io, { stdout, stderr, env });
     return 0;
   } catch (error) {

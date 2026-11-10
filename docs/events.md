@@ -38,7 +38,7 @@ Every event carries `meta`:
 | `stream:message` | string | A completed assistant message, for consumers that cannot render tokens. |
 | `stream:toolcall` | `{ name, args }` | A tool call is about to be resolved (approved, denied, or run). |
 | `stream:toolresult` | `{ name, result, denied? }` | What the tool returned. `result` is a preview; `denied` is true when it did not run. |
-| `stream:subagent` | `{ phase: 'start', task, model }` · `{ phase: 'tool', name, args }` · `{ phase: 'done', steps, note? }` | A `run_subagent` call: the scout starting, each tool it calls, and its finish. `note` says why it stopped early. Its model output is not streamed; its report arrives as the `run_subagent` `stream:toolresult`. |
+| `stream:subagent` | `{ phase: 'start', task, model, role }` · `{ phase: 'tool', name, args }` · `{ phase: 'done', steps, note? }` | A subagent run — a `run_subagent` scout, or a `/build` scout, coder or verifier (`role`): it starting, each tool it calls, and its finish. `note` says why it stopped early. Its model output is not streamed; its report arrives as the `run_subagent` `stream:toolresult`. |
 | `stream:stats` | `{ contextTokens, contextLength, tokPerSec, scope }` | Context use. `scope` is `"provider"` (one inference's own counts) or `"conversation"` (the size of the next request). |
 | `stream:cost` | `{ text, cost, promptTokens, evalTokens, sessionText }` | Once per turn, only when the provider is not local. `cost` is `null` when the provider publishes no rates — unknown, not free. |
 | `stream:done` | `{ ok, error?, stopped?, stats? }` | The run finished. Always the last event of a run. |

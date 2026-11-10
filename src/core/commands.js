@@ -36,6 +36,15 @@ function createCommands(rt) {
   return {
     chat: (payload) => rt.chatJobs.submitChat(payload),
 
+    // CLI addition: plan, then build task by task (core/pipeline.js). An empty
+    // goal resumes the plan in .brittain/plan.md.
+    build: ({ goal = '', ...payload } = {}) => rt.chatJobs.submitChat({
+      ...payload,
+      build: true,
+      goal,
+      text: goal.trim() ? `/build ${goal.trim()}` : '/build (resume the plan)',
+    }),
+
     stop: () => {
       const stopping = !!rt.run.abort;
       if (stopping) {

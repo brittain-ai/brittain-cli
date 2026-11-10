@@ -17,11 +17,11 @@ const { createStyles } = require('../../src/cli/markdown');
 const { createFakeProvider } = require('../helpers/fake-provider');
 const { createTestHost, settingsFor } = require('../helpers/test-host');
 
-// docs/PLAN.md M7, in order.
+// docs/PLAN.md M7, in order, plus /build (a CLI addition: docs/PLAN.md §10).
 const PLAN_TABLE = [
   '/help', '/clear', '/provider [brittain|openai|ollama]', '/model [name]',
   '/auto on|off', '/think on|off', '/compact', '/context', '/usage', '/cost', '/ledger',
-  '/memory', '/diff', '/commit <msg>', '/undo', '/history', '/export [path]', '/tools',
+  '/memory', '/diff', '/commit <msg>', '/build [goal]', '/undo', '/history', '/export [path]', '/tools',
 ];
 
 function gitRepo() {
@@ -43,6 +43,7 @@ async function setup(t, { turns = [{ text: 'ok' }], picks = [] } = {}) {
   const host = createTestHost({ settings: settingsFor('ollama', fake, 'qwen3:8b') });
   const runtime = createRuntime({ host, overrides: { cwd } });
   const lines = [];
+  const built = [];
   const pickQueue = [...picks];
   const ui = {
     style: createStyles(false),
@@ -50,6 +51,7 @@ async function setup(t, { turns = [{ text: 'ok' }], picks = [] } = {}) {
     state: { autoApprove: false },
     line: (text) => lines.push(String(text)),
     page: (text) => lines.push(String(text)),
+    build: async (goal) => { built.push(goal); },
     pick: async (question, items) => {
       lines.push(question, ...items.map((item) => item.label));
       return pickQueue.length ? pickQueue.shift() : null;
@@ -62,7 +64,7 @@ async function setup(t, { turns = [{ text: 'ok' }], picks = [] } = {}) {
     assert.equal(handled, true);
     return lines.join('\n');
   };
-  return { fake, cwd, host, runtime, ui, slash, run };
+  return { fake, cwd, host, runtime, ui, slash, run, built };
 }
 
 test('parseSlash splits the name and arguments', () => {
@@ -82,6 +84,13 @@ test('/help lists exactly the table, in order', async (t) => {
   assert.deepEqual(s.slash.table.map((entry) => entry.usage), PLAN_TABLE);
   const out = await s.run('/help');
   assert.deepEqual(out.split('\n').map((line) => line.split(/\s{2,}/)[0]), PLAN_TABLE);
+});
+
+test('/build passes the goal on, or an empty goal to resume the plan', async (t) => {
+  const s = await setup(t);
+  await s.run('/build a todo app in Node');
+  await s.run('/build');
+  assert.deepEqual(s.built, ['a todo app in Node', '']);
 });
 
 test('/clear starts a new chat', async (t) => {

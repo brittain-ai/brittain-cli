@@ -8,7 +8,8 @@
 // sensitive, and financial calls are denied even with --yes: there is no one
 // to ask, and --yes does not stand in for that person.
 //
-// Exit codes: 0 ok, 1 error, 2 finished with denied calls.
+// Exit codes: 0 ok, 1 error (or a /build that left a task undone), 2 finished
+// with denied calls.
 
 const fs = require('fs');
 const path = require('path');
@@ -17,7 +18,8 @@ const { TRANSCRIPT_CHANNELS } = require('../lib/run-sink');
 
 const OUTPUT_FORMATS = ['text', 'json', 'stream-json'];
 
-async function runPrintMode({ prompt, options, host, env, stdout, stderr, io }) {
+// build: true runs the /build pipeline instead of one chat turn (`brittain build`).
+async function runPrintMode({ prompt, options, host, env, stdout, stderr, io, build = false }) {
   const format = options['output-format'] || 'text';
   if (!OUTPUT_FORMATS.includes(format)) throw new Error(`--output-format must be one of: ${OUTPUT_FORMATS.join(', ')}.`);
   let cwd = process.cwd();
@@ -25,7 +27,7 @@ async function runPrintMode({ prompt, options, host, env, stdout, stderr, io }) 
     cwd = path.resolve(options.cwd);
     if (!fs.existsSync(cwd) || !fs.statSync(cwd).isDirectory()) throw new Error(`--cwd is not a directory: ${options.cwd}`);
   }
-  if (!String(prompt || '').trim()) throw new Error('Usage: brittain -p "<prompt>"');
+  if (!build && !String(prompt || '').trim()) throw new Error('Usage: brittain -p "<prompt>"');
 
   const { commands, events, rt } = createRuntime({
     host,
@@ -52,11 +54,10 @@ async function runPrintMode({ prompt, options, host, env, stdout, stderr, io }) 
   process.once('SIGINT', onSigint);
   let result;
   try {
-    result = await commands.chat({
-      text: prompt,
-      cwd,
-      ...(options.yes ? { autoApprove: true } : {}),
-    });
+    const payload = { cwd, ...(options.yes ? { autoApprove: true } : {}) };
+    result = build
+      ? await commands.build({ goal: prompt, ...payload })
+      : await commands.chat({ text: prompt, ...payload });
   } finally {
     process.removeListener('SIGINT', onSigint);
     unsubscribe();
@@ -64,7 +65,7 @@ async function runPrintMode({ prompt, options, host, env, stdout, stderr, io }) 
   }
 
   const deniedCalls = Math.max(denied, result.deniedCalls || 0);
-  const code = !result.ok || result.stopped ? 1 : deniedCalls ? 2 : 0;
+  const code = !result.ok || result.stopped || result.incomplete ? 1 : deniedCalls ? 2 : 0;
   if (format === 'json') {
     const provider = rt.providers.resolve();
     stdout.write(rt.providers.redact(JSON.stringify({

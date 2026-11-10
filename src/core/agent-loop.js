@@ -505,7 +505,7 @@ function createAgentLoop(rt) {
     return { lastContent, lastStats, contextLength, deniedCalls };
   }
 
-  return { runAgentTurn, shouldAutoCompact, compactPercent };
+  return { runAgentTurn, runSubagent: subagents.runSubagent, shouldAutoCompact, compactPercent };
 }
 
 module.exports = { MAX_AGENT_STEPS, createAgentLoop, preview };
