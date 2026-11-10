@@ -62,6 +62,8 @@ const {
   CODE_TOOL_NAMES,
   SUBAGENT_TOOLS,
   SUBAGENT_TOOL_NAMES,
+  CODER_TOOLS,
+  CODER_TOOL_NAMES,
 } = createToolPolicy(TOOL_DEFS);
 
 module.exports = {
@@ -73,8 +75,11 @@ module.exports = {
   CODE_TOOL_NAMES,
   SUBAGENT_TOOLS,
   SUBAGENT_TOOL_NAMES,
+  CODER_TOOLS,
+  CODER_TOOL_NAMES,
   createToolExecutor,
   isDestructiveCommand: shell.isDestructiveCommand,
+  runCommandStatus: shell.runCommandStatus,
   resolveForWrite: files.resolveForWrite,
   gitRun: git.gitRun,
   SELF_TALK: files.SELF_TALK,

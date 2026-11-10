@@ -86,8 +86,25 @@ async function runCommand(args, cwd) {
   });
 }
 
+// CLI addition (/build): the same shell, but the exit status comes back as a
+// number instead of a line appended to the output, so a task's Check is judged
+// by what the process did, not by parsing text a program could print itself.
+function runCommandStatus(command, cwd, timeoutMs = 120_000) {
+  return new Promise((resolve) => {
+    exec(command, { cwd, timeout: timeoutMs, maxBuffer: 4_000_000 }, (err, stdout, stderr) => {
+      let out = '';
+      if (stdout) out += stdout;
+      if (stderr) out += (out ? '\n--- stderr ---\n' : '') + stderr;
+      const timedOut = !!(err && err.killed);
+      const code = err ? (typeof err.code === 'number' ? err.code : 1) : 0;
+      resolve({ ok: !err, code, timedOut, output: truncate(out || '(no output)') });
+    });
+  });
+}
+
 module.exports = {
   COMMAND_TIMEOUT_MS,
+  runCommandStatus,
   isDestructiveCommand,
   handlers: {
     run_command: runCommand,

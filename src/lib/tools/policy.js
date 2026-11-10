@@ -41,6 +41,15 @@ const SUBAGENT_TOOL_NAMES = new Set([
   'git_status', 'get_git_log', 'read_git_diff',
 ]);
 
+// CLI addition (/build): what a coder subagent may call. The lead's editing and
+// running tools, less everything that deletes, moves, serves, delegates, asks,
+// or remembers — a coder gets one task and a brief, nothing more.
+const CODER_TOOL_NAMES = new Set([
+  'read_file', 'get_file_lines', 'browse_files', 'search_files',
+  'write_file', 'edit_file', 'apply_patch',
+  'run_command', 'git_status', 'read_git_diff',
+]);
+
 function selectTools(toolDefinitions, names) {
   return toolDefinitions.filter((definition) => names.has(definition.function.name));
 }
@@ -54,6 +63,8 @@ function createToolPolicy(toolDefinitions) {
     CODE_TOOLS: selectTools(toolDefinitions, CODE_TOOL_NAMES),
     SUBAGENT_TOOL_NAMES,
     SUBAGENT_TOOLS: selectTools(toolDefinitions, SUBAGENT_TOOL_NAMES),
+    CODER_TOOL_NAMES,
+    CODER_TOOLS: selectTools(toolDefinitions, CODER_TOOL_NAMES),
   };
 }
 
@@ -63,5 +74,6 @@ module.exports = {
   RISKY_TOOLS,
   SENSITIVE_TOOLS,
   SUBAGENT_TOOL_NAMES,
+  CODER_TOOL_NAMES,
   createToolPolicy,
 };

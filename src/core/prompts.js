@@ -14,7 +14,7 @@
 const fs = require('fs');
 const path = require('path');
 const workspace = require('../lib/workspace');
-const { CODE_TOOLS, SUBAGENT_TOOLS } = require('../lib/tools');
+const { CODE_TOOLS, SUBAGENT_TOOLS, CODER_TOOLS } = require('../lib/tools');
 const { indexToolDefs, revealedToolNames } = require('../lib/tools/tool-index');
 const { pinnedFilesPrompt, pinnedMessagesPrompt } = require('../lib/context-controls');
 const { estimateTokens } = require('./context-hygiene');
@@ -129,8 +129,9 @@ function createPrompts(rt) {
     }
   }
 
-  function subagentToolDefs() {
-    return SUBAGENT_TOOLS;
+  // CLI addition: `coder` gets the editing set; scouts and verifiers stay read-only.
+  function subagentToolDefs(role = 'scout') {
+    return role === 'coder' ? CODER_TOOLS : SUBAGENT_TOOLS;
   }
 
   return { activeToolDefs, fixedOverheadTokens, subagentToolDefs, systemPrompt, coldToolNames: COLD_TOOLS };
