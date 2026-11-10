@@ -18,9 +18,9 @@ const BUDGET = 3000;
 test(`the system prompt and tools fit the token budget (${BUDGET})`, () => {
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'bc-budget-'));
   const { rt } = createRuntime({ host: createTestHost(), overrides: { cwd } });
-  const system = { role: 'system', content: rt.prompts.systemPrompt(cwd, 'brittain-4') };
+  const system = { role: 'system', content: rt.prompts.systemPrompt(cwd, '') };
   const tokens = estimateContextTokens(system) + estimateContextTokens(rt.prompts.activeToolDefs());
   assert.ok(tokens <= BUDGET, `${tokens} tokens > ${BUDGET}`);
   // The inspector's number is the same one the loop sends.
-  assert.equal(rt.prompts.fixedOverheadTokens(cwd, 'brittain-4'), tokens);
+  assert.equal(rt.prompts.fixedOverheadTokens(cwd, ''), tokens);
 });

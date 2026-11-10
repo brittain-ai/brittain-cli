@@ -157,6 +157,9 @@ function createSubagentRunner(rt, { safeExecute, hardInputFor }) {
     let finalContent = '';
     let steps = 0;
     let note = '';
+    // Calls a human declined, or that nobody was there to approve. The caller
+    // adds them to the run's count, which is what `brittain build` exits 2 on.
+    const tally = { denied: 0 };
     // deadline for the whole subagent: aborts on user STOP or on timeout
     const signal = AbortSignal.any([rt.run.abort.signal, AbortSignal.timeout(spec.timeoutMs)]);
 
@@ -197,7 +200,7 @@ function createSubagentRunner(rt, { safeExecute, hardInputFor }) {
           if (!args || typeof args !== 'object') args = {};
           steps++;
           sink().emit('stream:subagent', { phase: 'tool', name, args });
-          const result = await runTool(name, args, { cwd, autoApprove, toolFailures, repeats, role });
+          const result = await runTool(name, args, { cwd, autoApprove, toolFailures, repeats, role, tally });
           rt.state.recordToolTelemetry(result, false);
           const bounded = boundToolResult(result, { toolName: name || 'tool', maxChars: resultLimit });
           msgs.push({ role: 'tool', tool_name: name, tool_call_id: tc.id, content: bounded.content });
@@ -235,10 +238,10 @@ function createSubagentRunner(rt, { safeExecute, hardInputFor }) {
     const report = (finalContent || '(subagent finished without producing findings)').slice(0, SUBAGENT_REPORT_CAP);
     sink().emit('stream:subagent', { phase: 'done', steps, ...(note ? { note } : {}) });
     const header = `Subagent report (${steps} tool ${steps === 1 ? 'call' : 'calls'}${note ? `; stopped early: ${note}` : ''}):`;
-    return { result: `${header}\n${report}`, stats: totals, report, steps, note, role };
+    return { result: `${header}\n${report}`, stats: totals, report, steps, note, role, denied: tally.denied };
   }
 
-  async function runTool(name, args, { cwd, autoApprove, toolFailures, repeats, role }) {
+  async function runTool(name, args, { cwd, autoApprove, toolFailures, repeats, role, tally }) {
     if (!ROLES[role].tools.has(name)) {
       return `Error: tool "${name}" is not available to ${role === 'coder' ? 'a coder' : 'subagents'}. ${role === 'coder' ? 'Use your editing and running tools.' : 'Use your read-only exploration tools.'}`;
     }
@@ -250,9 +253,9 @@ function createSubagentRunner(rt, { safeExecute, hardInputFor }) {
     }
     const approve = async (promptKind, deniedText) => {
       const decision = await rt.approvalFlow.resolveToolCall(name, args, { autoApprove, promptKind });
-      return decision.approved
-        ? safeExecute(name, args, cwd)
-        : unapprovedResult(decision.verdict, deniedText);
+      if (decision.approved) return safeExecute(name, args, cwd);
+      tally.denied += 1;
+      return unapprovedResult(decision.verdict, deniedText);
     };
     // The same gate as the lead's (agent-loop resolveCall): destructive and
     // sensitive calls always ask, and so does anything risky the policy asks about.

@@ -23,13 +23,6 @@ const AUTH_SCHEME = 'Bearer';
 
 const DEFAULT_MODEL = 'run4c-step-0116';
 
-// Used by the core where Brittain 4 behaves differently (context, thinking).
-function isBrittain4Model(model) {
-  return String(model || '') === DEFAULT_MODEL
-    || /(?:^|[/_-])brittain\s*[-_]?4(?:$|[/_.:-])/i.test(String(model || ''))
-    || /^brittain4$/i.test(String(model || ''));
-}
-
 function brittainEndpoint(env = process.env) {
   const override = String(env?.BRITTAIN_API_URL || '').trim();
   return (override || BRITTAIN_ENDPOINT).replace(/\/+$/, '');
@@ -80,6 +73,5 @@ module.exports = {
   DEFAULT_MODEL,
   authHeaders,
   brittainEndpoint,
-  isBrittain4Model,
   redactEndpoint,
 };

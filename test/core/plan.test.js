@@ -53,10 +53,12 @@ test('rejects a Check that is a sentence, not a command', () => {
 });
 
 test('looksLikeCommand tells prose from commands', () => {
-  for (const good of ['node --test', 'npm test', 'test -f index.html && grep -q h1 index.html', 'python3 -m py_compile app.py', '`node cli.js list`', 'grep -q "<nav>" index.html']) {
+  for (const good of ['node --test', 'npm test', 'test -f index.html && grep -q h1 index.html', 'python3 -m py_compile app.py', '`node cli.js list`', 'grep -q "<nav>" index.html',
+    'make test', 'go test ./...', 'CI=1 npm test', 'NODE_ENV=test node --test', 'PORT=3000 node server.js']) {
     assert.equal(looksLikeCommand(good), true, good);
   }
-  for (const bad of ['', 'Run the tests', 'Verify data.json is created', 'Test the CLI with various commands', 'npm install runs successfully', 'ls /path/to/dir', 'the app starts', 'Check the output']) {
+  for (const bad of ['', 'Run the tests', 'Verify data.json is created', 'Test the CLI with various commands', 'npm install runs successfully', 'ls /path/to/dir', 'the app starts', 'Check the output',
+    'make sure the tests pass', 'CI=1', 'node cli.js ...']) {
     assert.equal(looksLikeCommand(bad), false, bad);
   }
 });

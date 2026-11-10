@@ -22,20 +22,25 @@ const STATUSES = new Set(['pending', 'done', 'failed']);
 // ("Run a test to verify…"), which cannot gate anything.
 const PROSE_LEADS = new Set([
   'run', 'verify', 'ensure', 'check', 'confirm', 'execute', 'manually', 'open',
-  'make', 'see', 'view', 'observe', 'inspect', 'try', 'validate', 'the', 'all',
+  'see', 'view', 'observe', 'inspect', 'try', 'validate', 'the', 'all',
 ]);
 
 function looksLikeCommand(text) {
-  const command = String(text || '').trim().replace(/^`+|`+$/g, '').trim();
+  const command = String(text || '').trim().replace(/^`+|`+$/g, '').trim()
+    // `CI=1 npm test`: the command is what follows the assignments.
+    .replace(/^(?:[A-Za-z_]\w*=\S*\s+)+/, '');
   if (!command) return false;
   const words = command.split(/\s+/);
   const first = words[0];
   if (/^[A-Z]/.test(first)) return false;
   const lead = first.toLowerCase();
   if (PROSE_LEADS.has(lead)) return false;
+  // `make test` is a command; "make sure the tests pass" is prose.
+  if (lead === 'make' && /^sure$/i.test(words[1] || '')) return false;
   // `test` is a real command, but only with an operator; "Test the CLI" is prose.
   if (lead === 'test' && !/^(-|\[|!)/.test(words[1] || '')) return false;
-  if (/\/path\/to\b|\.\.\.$/.test(command)) return false;
+  // A trailing "..." is an unfinished placeholder, except Go's `./...` pattern.
+  if (/\/path\/to\b|(?<!\/)\.\.\.$/.test(command)) return false;
   // "npm install runs successfully": a command name followed by a sentence.
   // Real commands with arguments almost always carry a flag, path, quote or
   // operator; a bare run of words with a prose verb in it does not.

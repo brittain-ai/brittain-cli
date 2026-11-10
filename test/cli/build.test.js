@@ -38,6 +38,7 @@ async function setup(t, coderContent) {
       const role = roleOf(body);
       if (role === 'planner') return { text: PLAN };
       if (role === 'coder') {
+        if (typeof coderContent === 'function') return coderContent(body);
         return body.messages.some((m) => m.role === 'tool')
           ? { text: 'Changed a.txt.' }
           : { toolCalls: [{ name: 'write_file', arguments: { path: 'a.txt', content: coderContent } }] };
@@ -86,4 +87,17 @@ test('build with no goal and no plan says so', async (t) => {
   const { home, cwd } = await setup(t, 'alpha\n');
   const out = await runCli(['build', '--cwd', cwd], { home });
   assert.match(out.stdout, /There is no plan to resume/);
+});
+
+test('build exits 2 when it finished but a coder call was denied', async (t) => {
+  // rm -rf is destructive: with nobody there it is denied, --yes or not.
+  const { home, cwd } = await setup(t, (body) => {
+    const results = body.messages.filter((m) => m.role === 'tool').length;
+    if (results === 0) return { toolCalls: [{ name: 'run_command', arguments: { command: 'rm -rf junk' } }] };
+    if (results === 1) return { toolCalls: [{ name: 'write_file', arguments: { path: 'a.txt', content: 'alpha\n' } }] };
+    return { text: 'Changed a.txt.' };
+  });
+  const out = await runCli(['build', '--yes', '--cwd', cwd, 'one text file'], { home });
+  assert.match(out.stdout, /1\/1 tasks done/);
+  assert.equal(out.status, 2, out.stderr);
 });

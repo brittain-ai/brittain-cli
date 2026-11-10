@@ -6,6 +6,11 @@ A lightweight, pure-Node, terminal-first version of Brittain Code, built in a
 **core** — agent loop, curated tools, system prompts, memory, code
 modes — and deliberately leaves everything else behind.
 
+> **Note (2026-11-09):** Brittain 4 is scrapped. Where this plan names it,
+> read "the model the Brittain API serves"; the agentic target is now
+> Brittain 2.5 L. Numbers measured on Brittain 4 (the planner's thinking
+> setting, step budgets) have not been re-measured.
+
 This document is written for coding agents. Read **§1 Rules** before touching
 anything, then work **one milestone per PR** in the order given in **§8**.
 
@@ -255,9 +260,8 @@ content is appended as data (as the source does), not as instructions.
   same file, so switching to an Ollama-shaped server is a one-line change.
 - Auth: `Authorization: Bearer <key>` when a key is set; no header otherwise.
   Keep the header name in the same file so the human can change the scheme.
-- Model-specific behaviour already in the source for Brittain 4
-  (`isBrittain4Model`) is kept where it affects the core (context, thinking).
-  Jev compaction is **not** in v1 — Brittain 4 uses native compaction.
+- Jev compaction is **not** in v1 — compaction is native. (`isBrittain4Model`
+  was ported and never used; removed 2026-11-09.)
 - **Tell the human in the M2 PR:** an endpoint in an npm package is readable by
   anyone who opens the package. "Hidden" means kept out of the UI, not secret.
   Access control has to be server-side (keys, rate limits).
@@ -581,7 +585,7 @@ to Ollama works with a local model.
 1. Online research (`web_search`, `web_fetch`) behind `/online`.
 2. ~~Subagents (`run_subagent`), and a scout-model setting.~~ **Done (2026-09-23):** `run_subagent` with the source's read-only tool set, and the `subagentModel` setting (empty = the lead's model, on the lead's provider).
 3. Image and file attachments (`@path`).
-4. Jev compaction for Brittain 4.
+4. ~~Jev compaction for Brittain 4.~~ Dropped (2026-11-09): Brittain 4 is scrapped.
 5. `/plan`, `/review`, `/orchestrate`, `/loop`, missions. **Partly done
    (2026-09-28):** `/build` (also `brittain build "<goal>"`) — see §10.1.
    The rest stay out.
@@ -594,7 +598,7 @@ to Ollama works with a local model.
 
 ### 10.1 `/build`: a code-driven orchestrator
 
-Built because Brittain 4's window is small. A first attempt at "make a todo
+Built for small models (first measured on Brittain 4). A first attempt at "make a todo
 app" in one agent turn spent ten of its twenty-five steps on a module-system
 question and reported success over two real bugs. So the orchestrator is code
 (`src/core/pipeline.js`), and the model is called for one narrow job at a
